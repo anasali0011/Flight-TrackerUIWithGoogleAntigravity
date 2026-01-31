@@ -1,66 +1,110 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+"use client";
+
+import React, { useState, useEffect } from 'react';
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
+import SearchForm from '@/components/SearchForm';
+import FlightCard from '@/components/FlightCard';
+import Loading from '@/components/Loading';
+import NotFound from '@/components/NotFound';
+import { mockFlights, Flight } from '@/data/flights';
 
 export default function Home() {
+  const [flight, setFlight] = useState<Flight | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+
+  // Silent refresh function
+  const refreshFlight = async (flightNumber: string) => {
+    try {
+      const res = await fetch(`/api/search?query=${flightNumber}`);
+      if (res.ok) {
+        const data = await res.json();
+        setFlight(data); // Update state with fresh data
+      }
+    } catch (error) {
+      console.error('Silent refresh failed', error);
+    }
+  };
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (flight) {
+      interval = setInterval(() => {
+        refreshFlight(flight.flightNumber);
+      }, 5000); // Poll every 5 seconds
+    }
+    return () => clearInterval(interval);
+  }, [flight]);
+
+  const handleSearch = async (flightNumber: string) => {
+    setLoading(true);
+    setFlight(null);
+    setHasSearched(true);
+
+    try {
+      const res = await fetch(`/api/search?query=${flightNumber}`);
+      if (res.ok) {
+        const data = await res.json();
+        setFlight(data);
+      } else {
+        setFlight(null);
+      }
+    } catch (error) {
+      console.error('Failed to fetch flight:', error);
+      setFlight(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.tsx file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <>
+      <Header />
+      <SearchForm onSearch={handleSearch} isLoading={loading} />
+
+      {!hasSearched && !loading && (
+        <div style={{ textAlign: 'center', marginBottom: '2rem', color: 'var(--white)', background: 'rgba(255,255,255,0.2)', padding: '1rem', borderRadius: '1rem', backdropFilter: 'blur(5px)' }}>
+          <p style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>Try searching for:</p>
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            {mockFlights.map(f => (
+              <button
+                key={f.flightNumber}
+                onClick={() => handleSearch(f.flightNumber)}
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '20px',
+                  cursor: 'pointer',
+                  color: 'var(--accent-color)',
+                  fontWeight: 600,
+                  transition: 'all 0.2s',
+                  backdropFilter: 'blur(5px)'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.transform = 'scale(1.05)';
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.2)';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.transform = 'scale(1)';
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+                }}
+              >
+                {f.flightNumber}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      )}
+
+      <div style={{ minHeight: '300px' }}>
+        {loading && <Loading />}
+        {!loading && flight && <FlightCard flight={flight} />}
+        {!loading && hasSearched && !flight && <NotFound />}
+      </div>
+
+      <Footer />
+    </>
   );
 }
